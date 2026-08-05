@@ -14,13 +14,14 @@ PROCESSES_NUM = 4
 def find_chunk_boundaries(
     file: BinaryIO,
     desired_num_chunks: int,
-    split_special_token: bytes,
+    split_special_tokens: list[bytes],
 ) -> list[int]:
     """
     Chunk the file into parts that can be counted independently.
     May return fewer chunks if the boundaries end up overlapping.
     """
-    assert isinstance(split_special_token, bytes), "Must represent special token as a bytestring"
+    for token in split_special_tokens:
+        assert isinstance(token, bytes), "Must represent special token as a bytestring"
 
     # Get total file size in bytes
     file.seek(0, os.SEEK_END)
@@ -48,7 +49,7 @@ def find_chunk_boundaries(
                 break
 
             # Find the special token in the mini chunk
-            found_at = mini_chunk.find(split_special_token)
+            found_at = max(mini_chunk.find(token) for token in split_special_tokens)
             if found_at != -1:
                 chunk_boundaries[bi] = initial_position + found_at
                 break
@@ -61,7 +62,6 @@ def find_chunk_boundaries(
 def pretokenization(
     text: str,
 ) -> Iterator[re.Match[str]]:
-    # TODO: split on special token, also
     return re.finditer(PATTERN, text)
 
 
@@ -117,9 +117,7 @@ def merge(
 
 """
 TODO
-1. draft
 2. multiprocessing
-3. split on special token
 4. lock?
 """
 
@@ -127,14 +125,13 @@ TODO
 def train_bpe(
     input_path: str | os.PathLike,
     vocab_size: int,
-    # TODO  multiple tokens
     special_tokens: list[str],
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
 
     with open(input_path, "rb") as f:
         num_processes = PROCESSES_NUM
-        # TODO split tokens
-        boundaries = find_chunk_boundaries(f, num_processes, special_tokens[0].encode("utf-8"))
+        special_tokens_bytes: list[bytes] = [special_token.encode("utf-8") for special_token in special_tokens]
+        boundaries = find_chunk_boundaries(f, num_processes, special_tokens_bytes)
 
         # The following is a serial implementation, but you can parallelize this
         # by sending each start/end pair to a set of processes.
@@ -143,16 +140,25 @@ def train_bpe(
             f.seek(start)
             chunk = f.read(end - start).decode("utf-8", errors="ignore")
 
-            # Run pre-tokenization on your chunk and store the counts for each pre-token
-            matches = pretokenization(chunk)
-            for match in matches:
-                pretoken_str = match.group()
-                encoded = pretoken_str.encode("utf-8")
-                byte_tokens = tuple(bytes([byte]) for byte in encoded)
-                pretokens[byte_tokens] = pretokens.get(byte_tokens, 0) + 1
+            split_chunks: list[str] = re.split("|".join(re.escape(token) for token in special_tokens), chunk)
 
-        # if DEBUG:
-        #    print(pretokens)
+            if DEBUG:
+                for split_chunk in split_chunks:
+                    print(split_chunk)
+
+            for split_chunk in split_chunks:
+                # Run pre-tokenization on your chunk and store the counts for each pre-token
+                matches = pretokenization(split_chunk)
+                for match in matches:
+                    pretoken_str = match.group()
+                    encoded = pretoken_str.encode("utf-8")
+                    byte_tokens = tuple(bytes([byte]) for byte in encoded)
+                    pretokens[byte_tokens] = pretokens.get(byte_tokens, 0) + 1
+
+        """
+        if DEBUG:
+            print(pretokens)
+        """
 
         # vocab part 1: ascii
         vocab: dict[int, bytes] = {token_id: bytes([token_id]) for token_id in range(256)}
@@ -161,8 +167,10 @@ def train_bpe(
             vocab[len(vocab)] = spec_token.encode("utf-8")
         merges: list[tuple[bytes, bytes]] = merge(pretokens, vocab_size, vocab)
 
+        """
         if DEBUG:
             print(vocab)
             print(merges)
+        """
 
         return (vocab, merges)
