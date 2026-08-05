@@ -1,6 +1,7 @@
 import itertools
 import os
 from collections.abc import Iterator
+from multiprocessing import Pool
 from typing import BinaryIO
 
 import regex as re
@@ -59,7 +60,7 @@ def find_chunk_boundaries(
     return sorted(set(chunk_boundaries))
 
 
-def pretokenization(
+def regex_match(
     text: str,
 ) -> Iterator[re.Match[str]]:
     return re.finditer(PATTERN, text)
@@ -115,11 +116,19 @@ def merge(
     return merges
 
 
-"""
-TODO
-2. multiprocessing
-4. lock?
-"""
+def tokenization(chunk: str, special_tokens: list[str]) -> dict[tuple[bytes, ...], int]:
+    split_chunks: list[str] = re.split("|".join(re.escape(token) for token in special_tokens), chunk)
+
+    pretokens: dict[tuple[bytes, ...], int] = {}
+    for split_chunk in split_chunks:
+        # Run pre-tokenization on your chunk and store the counts for each pre-token
+        matches = regex_match(split_chunk)
+        for match in matches:
+            pretoken_str = match.group()
+            encoded = pretoken_str.encode("utf-8")
+            byte_tokens = tuple(bytes([byte]) for byte in encoded)
+            pretokens[byte_tokens] = pretokens.get(byte_tokens, 0) + 1
+    return pretokens
 
 
 def train_bpe(
@@ -135,25 +144,19 @@ def train_bpe(
 
         # The following is a serial implementation, but you can parallelize this
         # by sending each start/end pair to a set of processes.
-        pretokens: dict[tuple[bytes, ...], int] = {}
+        chunks: list[str] = []
         for start, end in itertools.pairwise(boundaries):
             f.seek(start)
             chunk = f.read(end - start).decode("utf-8", errors="ignore")
+            chunks.append(chunk)
 
-            split_chunks: list[str] = re.split("|".join(re.escape(token) for token in special_tokens), chunk)
+        with Pool(processes=num_processes) as pool:
+            partial_tokens = pool.starmap(tokenization, zip(chunks, itertools.repeat(special_tokens)))
 
-            if DEBUG:
-                for split_chunk in split_chunks:
-                    print(split_chunk)
-
-            for split_chunk in split_chunks:
-                # Run pre-tokenization on your chunk and store the counts for each pre-token
-                matches = pretokenization(split_chunk)
-                for match in matches:
-                    pretoken_str = match.group()
-                    encoded = pretoken_str.encode("utf-8")
-                    byte_tokens = tuple(bytes([byte]) for byte in encoded)
-                    pretokens[byte_tokens] = pretokens.get(byte_tokens, 0) + 1
+        pretokens: dict[tuple[bytes, ...], int] = {}
+        for partial in partial_tokens:
+            for tokens, count in partial.items():
+                pretokens[tokens] = pretokens.get(tokens, 0) + count
 
         """
         if DEBUG:
