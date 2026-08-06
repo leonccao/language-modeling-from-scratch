@@ -6,7 +6,7 @@ from typing import BinaryIO
 
 import regex as re
 
-DEBUG = True
+DEBUG = False
 
 PATTERN = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 PROCESSES_NUM = 4
@@ -66,63 +66,152 @@ def regex_match(
     return re.finditer(PATTERN, text)
 
 
-def find_top_freq(frequency: dict[tuple[bytes, bytes], int]) -> tuple[bytes, bytes]:
-    pair_max, _ = max(frequency.items(), key=lambda item: (item[1], item[0]))
-    return pair_max
+def find_top_freq(
+    frequency: dict[tuple[bytes, bytes], int],
+) -> tuple[tuple[bytes, bytes], int]:
+    pair_max, freq_max = max(frequency.items(), key=lambda item: (item[1], item[0]))
+    return (pair_max, freq_max)
 
 
-def merge_pair(
+def dec_pair(
+    pretok_id: int,
+    cnt: int,
+    pair: tuple[bytes, bytes],
+    freq: dict[tuple[bytes, bytes], int],
+    aprs: dict[tuple[bytes, bytes], dict[int, int]],
+):
+    if DEBUG:
+        print("pretok_id")
+        print(pretok_id)
+        print("pair")
+        print(pair)
+        print("aprs")
+        print(aprs)
+        print("apr_dict")
+        idx = aprs.get(pair, 0)
+        print(idx)
+
+    new_freq = freq.pop(pair) - cnt
+    if new_freq > 0:
+        freq[pair] = new_freq
+
+    aprs_dict: dict[int, int] = aprs.pop(pair)
+    new_aprs_cnt = aprs_dict.pop(pretok_id) - cnt
+    if new_aprs_cnt > 0:
+        aprs_dict[pretok_id] = new_aprs_cnt
+    if len(aprs_dict) > 0:
+        aprs[pair] = aprs_dict
+
+
+def inc_pair(
+    pretok_id: int,
+    cnt: int,
+    pair: tuple[bytes, bytes],
+    freq: dict[tuple[bytes, bytes], int],
+    aprs: dict[tuple[bytes, bytes], dict[int, int]],
+):
+    freq[pair] = freq.get(pair, 0) + cnt
+
+    aprs_dict: dict[int, int] = aprs.get(pair, {})
+    aprs_dict[pretok_id] = aprs_dict.get(pretok_id, 0) + cnt
+    aprs[pair] = aprs_dict
+
+
+def merge_pairs(
+    pretok_id: int,
     tokens: tuple[bytes, ...],
+    cnt: int,
     pair_max: tuple[bytes, bytes],
+    freq: dict[tuple[bytes, bytes], int],
+    aprs: dict[tuple[bytes, bytes], dict[int, int]],
 ) -> tuple[bytes, ...]:
+    if DEBUG:
+        print("tokens")
+        print(tokens)
+        print("pair_max")
+        print(pair_max)
+
     token_mergerd = pair_max[0] + pair_max[1]
     result: list[bytes] = []
     i = 0
+    last_token = b""
     while i < len(tokens):
         if i + 1 < len(tokens) and (tokens[i], tokens[i + 1]) == pair_max:
             result.append(token_mergerd)
+
+            # update freq and appears
+            dec_pair(pretok_id, cnt, (tokens[i], tokens[i + 1]), freq, aprs)
+            if i > 0:
+                dec_pair(pretok_id, cnt, (last_token, tokens[i]), freq, aprs)
+                inc_pair(pretok_id, cnt, (last_token, token_mergerd), freq, aprs)
+            if i + 2 < len(tokens):
+                dec_pair(pretok_id, cnt, (tokens[i + 1], tokens[i + 2]), freq, aprs)
+                inc_pair(pretok_id, cnt, (token_mergerd, tokens[i + 2]), freq, aprs)
+
+            last_token = token_mergerd
             i += 2
         else:
             result.append(tokens[i])
+            last_token = tokens[i]
             i += 1
 
     return tuple(result)
 
 
 def record_pairs(
-    pretoks: dict[tuple[bytes, ...], int],
-) -> tuple[dict[tuple[bytes, bytes], int], dict[tuple[bytes, ...], list[int]]]:
-    loc: dict[tuple[bytes, ...], list[int]] = {}
+    pretoks: dict[int, tuple[tuple[bytes, ...], int]],
+) -> tuple[
+    dict[tuple[bytes, bytes], int],
+    dict[tuple[bytes, bytes], dict[int, int]],
+]:
     freq: dict[tuple[bytes, bytes], int] = {}
+    aprs: dict[tuple[bytes, bytes], dict[int, int]] = {}
 
-    for tokens, cnt in pretoks.items():
+    for pretok_id, (tokens, cnt) in pretoks.items():
         for i in range(len(tokens) - 1):
             pair = (tokens[i], tokens[i + 1])
             freq[pair] = freq.get(pair, 0) + cnt
-            loc.get(pair, []).append(i)
+            # add pretok to appears of pair
+            aprs_dict: dict[tuple[bytes, ...], int] = aprs.get(pair, {})
+            aprs_dict[pretok_id] = aprs_dict.get(pretok_id, 0) + cnt
+            aprs[pair] = aprs_dict
 
-    return (freq, loc)
+    return (freq, aprs)
 
 
 def merge(
-    pretoks: dict[tuple[bytes, ...], int], vocab_size: int, vocab: dict[int, bytes]
+    pretoks: dict[int, tuple[tuple[bytes, ...], int]],
+    vocab_size: int,
+    vocab: dict[int, bytes],
 ) -> list[tuple[bytes, bytes]]:
     merges: list[tuple[bytes, bytes]] = []
+    freq, aprs = record_pairs(pretoks)
 
     while len(vocab) < vocab_size:
-        freq, _ = record_pairs(pretoks)
-
         # find most frequent pair
-        pair_max = find_top_freq(freq)
+        pair_max, _ = find_top_freq(freq)
+
+        if DEBUG:
+            print("pair_max")
+            print(pair_max)
+
         merges.append(pair_max)
         # vocab part 3: merges
         vocab[len(vocab)] = pair_max[0] + pair_max[1]
 
-        new_pretoks: dict[tuple[bytes, ...], int] = {}
-        for tokens, cnt in pretoks.items():
-            new_tokens = merge_pair(tokens, pair_max)
-            new_pretoks[new_tokens] = cnt
-        pretoks = new_pretoks
+        if DEBUG:
+            print("pretoks")
+            print(pretoks)
+
+        aprs_pretoks = list(aprs.get(pair_max, {}).keys())
+        if DEBUG:
+            print("aprs_pretoks")
+            print(aprs_pretoks)
+
+        for pretok_id in aprs_pretoks:
+            tokens, cnt = pretoks.pop(pretok_id)
+            new_tokens = merge_pairs(pretok_id, tokens, cnt, pair_max, freq, aprs)
+            pretoks[pretok_id] = (new_tokens, cnt)
 
     return merges
 
@@ -170,10 +259,13 @@ def train_bpe(
                 tokenization, zip(chunks, itertools.repeat(special_tokens))
             )
 
-        pretokens: dict[tuple[bytes, ...], int] = {}
+        pretoks_dict: dict[tuple[bytes, ...], int] = {}
         for partial in partial_tokens:
             for tokens, count in partial.items():
-                pretokens[tokens] = pretokens.get(tokens, 0) + count
+                pretoks_dict[tokens] = pretoks_dict.get(tokens, 0) + count
+        pretoks: dict[int, tuple[tuple[bytes, ...], int]] = {}
+        for tokens, cnt in pretoks_dict.items():
+            pretoks[len(pretoks)] = (tokens, cnt)
 
         """
         if DEBUG:
@@ -187,7 +279,7 @@ def train_bpe(
         # vocab part 2: special tokens
         for spec_token in special_tokens:
             vocab[len(vocab)] = spec_token.encode("utf-8")
-        merges: list[tuple[bytes, bytes]] = merge(pretokens, vocab_size, vocab)
+        merges: list[tuple[bytes, bytes]] = merge(pretoks, vocab_size, vocab)
 
         """
         if DEBUG:
