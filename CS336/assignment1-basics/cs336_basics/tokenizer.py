@@ -3,6 +3,7 @@ import itertools
 import os
 from collections.abc import Iterator
 from multiprocessing import Pool
+from pathlib import Path
 from typing import BinaryIO
 
 import regex as re
@@ -292,9 +293,9 @@ def train_bpe(
 
 
 """
-uv run cs336_basics/tokenizer.py --input-path tests/fixtures/corpus.en --vocab-size 500 --special-token '<|endoftext|>' > output.txt
-uv run cs336_basics/tokenizer.py --input-path tests/fixtures/tinystories_sample.txt  --vocab-size 500 --special-token '<|endoftext|>' > output.txt
-uv run cs336_basics/tokenizer.py --input-path tests/fixtures/tinystories_sample_5M.txt  --vocab-size 10000 --special-token '<|endoftext|>' > output.txt
+uv run cs336_basics/tokenizer.py --input-path tests/fixtures/corpus.en --vocab-size 500 --special-token '<|endoftext|>'
+uv run cs336_basics/tokenizer.py --input-path tests/fixtures/tinystories_sample.txt --vocab-size 500 --special-token '<|endoftext|>' --output-path outputs/tinystories
+uv run cs336_basics/tokenizer.py --input-path tests/fixtures/tinystories_sample_5M.txt --vocab-size 10000 --special-token '<|endoftext|>'
 """
 
 
@@ -302,7 +303,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Train a BPE tokenizer")
     parser.add_argument(
         "--input-path",
-        type=str,
+        type=Path,
         required=True,
         help="Path to the training corpus.",
     )
@@ -315,6 +316,12 @@ def main() -> None:
         default=[],
         help="A special token. Repeat this argument to provide multiple special tokens",
     )
+    parser.add_argument(
+        "--output-path",
+        type=Path,
+        default=Path("outputs"),
+        help="Directory for vocab.txt and merges.txt (default: outputs/).",
+    )
     args = parser.parse_args()
 
     vocab, merges = train_bpe(
@@ -324,17 +331,17 @@ def main() -> None:
     )
 
     vocab_list = [(id, v.decode("utf-8", errors="ignore")) for id, v in vocab.items()]
-    merges = [
+    merges_list = [
         (
             tok.decode("utf-8", errors="ignore"),
             next_tok.decode("utf-8", errors="ignore"),
         )
         for tok, next_tok in merges
     ]
-    print("vocab")
-    print(vocab_list)
-    print("merges")
-    print(merges)
+
+    args.output_path.mkdir(parents=True, exist_ok=True)
+    (args.output_path / "vocab.txt").write_text(f"{vocab_list}\n", encoding="utf-8")
+    (args.output_path / "merges.txt").write_text(f"{merges_list}\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
