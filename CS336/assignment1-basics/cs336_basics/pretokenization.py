@@ -1,3 +1,4 @@
+import argparse
 import itertools
 import os
 from collections.abc import Iterator
@@ -288,3 +289,53 @@ def train_bpe(
         """
 
         return (vocab, merges)
+
+
+"""
+uv run cs336_basics/pretokenization.py --input-path tests/fixtures/corpus.en --vocab-size 500 --special-token '<|endoftext|>' > output.txt
+uv run cs336_basics/pretokenization.py --input-path tests/fixtures/tinystories_sample.txt  --vocab-size 500 --special-token '<|endoftext|>' > output.txt
+uv run cs336_basics/pretokenization.py --input-path tests/fixtures/tinystories_sample_5M.txt  --vocab-size 10000 --special-token '<|endoftext|>' > output.txt
+"""
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Train a BPE tokenizer")
+    parser.add_argument(
+        "--input-path",
+        type=str,
+        required=True,
+        help="Path to the training corpus.",
+    )
+    parser.add_argument(
+        "--vocab-size", type=int, required=True, help="Total vocabulary size."
+    )
+    parser.add_argument(
+        "--special-token",
+        action="append",
+        default=[],
+        help="A special token. Repeat this argument to provide multiple special tokens",
+    )
+    args = parser.parse_args()
+
+    vocab, merges = train_bpe(
+        input_path=args.input_path,
+        vocab_size=args.vocab_size,
+        special_tokens=args.special_token,
+    )
+
+    vocab_list = [(id, v.decode("utf-8", errors="ignore")) for id, v in vocab.items()]
+    merges = [
+        (
+            tok.decode("utf-8", errors="ignore"),
+            next_tok.decode("utf-8", errors="ignore"),
+        )
+        for tok, next_tok in merges
+    ]
+    print("vocab")
+    print(vocab_list)
+    print("merges")
+    print(merges)
+
+
+if __name__ == "__main__":
+    main()
