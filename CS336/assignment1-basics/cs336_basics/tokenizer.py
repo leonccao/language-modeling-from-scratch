@@ -299,6 +299,27 @@ uv run cs336_basics/tokenizer.py --input-path tests/fixtures/tinystories_sample_
 """
 
 
+def write_bpe_outputs(
+    vocab: dict[int, bytes],
+    merges: list[tuple[bytes, bytes]],
+    output_path: str | os.PathLike,
+) -> None:
+    """Write a trained BPE vocabulary and merge list to an output directory."""
+    vocab_list = [(id, v.decode("utf-8", errors="ignore")) for id, v in vocab.items()]
+    merges_list = [
+        (
+            tok.decode("utf-8", errors="ignore"),
+            next_tok.decode("utf-8", errors="ignore"),
+        )
+        for tok, next_tok in merges
+    ]
+
+    output_path = Path(output_path)
+    output_path.mkdir(parents=True, exist_ok=True)
+    (output_path / "vocab.txt").write_text(f"{vocab_list}\n", encoding="utf-8")
+    (output_path / "merges.txt").write_text(f"{merges_list}\n", encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train a BPE tokenizer")
     parser.add_argument(
@@ -329,19 +350,7 @@ def main() -> None:
         vocab_size=args.vocab_size,
         special_tokens=args.special_token,
     )
-
-    vocab_list = [(id, v.decode("utf-8", errors="ignore")) for id, v in vocab.items()]
-    merges_list = [
-        (
-            tok.decode("utf-8", errors="ignore"),
-            next_tok.decode("utf-8", errors="ignore"),
-        )
-        for tok, next_tok in merges
-    ]
-
-    args.output_path.mkdir(parents=True, exist_ok=True)
-    (args.output_path / "vocab.txt").write_text(f"{vocab_list}\n", encoding="utf-8")
-    (args.output_path / "merges.txt").write_text(f"{merges_list}\n", encoding="utf-8")
+    write_bpe_outputs(vocab, merges, args.output_path)
 
 
 if __name__ == "__main__":

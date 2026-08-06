@@ -8,6 +8,7 @@ from .adapters import run_train_bpe
 from .common import FIXTURES_PATH, gpt2_bytes_to_unicode
 
 DATA_PATH = FIXTURES_PATH.parent.parent / "data"
+OUTPUT_PATH = FIXTURES_PATH.parent.parent / "outputs"
 LARGE_DATASETS = {
     "tinystories": DATA_PATH / "TinyStoriesV2-GPT4-train.txt",
     "openwebtext": DATA_PATH / "owt_train.txt",
@@ -15,6 +16,10 @@ LARGE_DATASETS = {
 LARGE_VOCAB_SIZE = {
     "tinystories": 10_000,
     "openwebtext": 32_000,
+}
+LARGE_OUTPUT_PATHS = {
+    "tinystories": OUTPUT_PATH / "TinyStories",
+    "openwebtext": OUTPUT_PATH / "OpenWebText",
 }
 
 
@@ -76,6 +81,18 @@ def test_train_bpe():
     assert set(vocab.values()) == set(reference_vocab.values())
 
 
+def test_train_bpe_writes_outputs(tmp_path):
+    run_train_bpe(
+        input_path=FIXTURES_PATH / "corpus.en",
+        vocab_size=258,
+        special_tokens=["<|endoftext|>"],
+        output_path=tmp_path,
+    )
+
+    assert (tmp_path / "vocab.txt").is_file()
+    assert (tmp_path / "merges.txt").is_file()
+
+
 def test_train_bpe_special_tokens(snapshot):
     """
     Ensure that the special tokens are added to the vocabulary and not
@@ -120,11 +137,11 @@ def test_train_bpe_large_dataset():
             f"choose one of {sorted(LARGE_DATASETS)}"
         )
 
+    vocab_size = LARGE_VOCAB_SIZE[dataset_name]
     input_path = LARGE_DATASETS[dataset_name]
     if not input_path.is_file():
         pytest.fail(f"Dataset does not exist: {input_path}")
 
-    vocab_size = LARGE_VOCAB_SIZE[dataset_name]
     special_token = "<|endoftext|>"
 
     start_time = time.perf_counter()
@@ -132,12 +149,16 @@ def test_train_bpe_large_dataset():
         input_path=input_path,
         vocab_size=vocab_size,
         special_tokens=[special_token],
+        output_path=LARGE_OUTPUT_PATHS[dataset_name],
     )
     train_time = time.perf_counter() - start_time
 
+    longest_token = max(vocab.values(), key=len)
+
     print(
         f"\n{dataset_name}: trained {len(vocab):,} tokens and "
-        f"{len(merges):,} merges in {train_time:.2f} seconds"
+        f"{len(merges):,} merges in {train_time:.2f} seconds "
+        f"with the longest token as {longest_token!r} ({len(longest_token)} bytes)"
     )
 
     assert len(vocab) == vocab_size

@@ -9,7 +9,7 @@ import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
 
-from cs336_basics.tokenizer import train_bpe
+from cs336_basics.tokenizer import train_bpe, write_bpe_outputs
 
 
 def run_linear(
@@ -568,6 +568,7 @@ def run_train_bpe(
     input_path: str | os.PathLike,
     vocab_size: int,
     special_tokens: list[str],
+    output_path: str | os.PathLike | None = None,
     **kwargs,
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
     """Given the path to an input corpus, run train a BPE tokenizer and
@@ -580,6 +581,8 @@ def run_train_bpe(
             These strings will never be split into multiple tokens, and will always be
             kept as a single token. If these special tokens occur in the `input_path`,
             they are treated as any other string.
+        output_path (str | os.PathLike | None): Optional directory for writing
+            vocab.txt and merges.txt. No files are written when omitted.
 
     Returns:
         tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
@@ -591,4 +594,7 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-    return train_bpe(input_path, vocab_size, special_tokens)
+    vocab, merges = train_bpe(input_path, vocab_size, special_tokens)
+    if output_path is not None:
+        write_bpe_outputs(vocab, merges, output_path)
+    return vocab, merges
