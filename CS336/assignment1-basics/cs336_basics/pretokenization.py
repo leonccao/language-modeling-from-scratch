@@ -66,7 +66,7 @@ def regex_match(
     return re.finditer(PATTERN, text)
 
 
-def find_top_occurence(frequency: dict[tuple[bytes, bytes], int]) -> tuple[bytes, bytes]:
+def find_top_freq(frequency: dict[tuple[bytes, bytes], int]) -> tuple[bytes, bytes]:
     pair_max, _ = max(frequency.items(), key=lambda item: (item[1], item[0]))
     return pair_max
 
@@ -89,29 +89,39 @@ def merge_pair(
     return tuple(result)
 
 
-def merge(
-    pretokens: dict[tuple[bytes, ...], int], vocab_size: int, vocab: dict[int, bytes]
-) -> list[tuple[bytes, bytes]]:
+def record_pairs(
+    pretoks: dict[tuple[bytes, ...], int],
+) -> tuple[dict[tuple[bytes, bytes], int], dict[tuple[bytes, ...], list[int]]]:
+    loc: dict[tuple[bytes, ...], list[int]] = {}
+    freq: dict[tuple[bytes, bytes], int] = {}
+
+    for tokens, cnt in pretoks.items():
+        for i in range(len(tokens) - 1):
+            pair = (tokens[i], tokens[i + 1])
+            freq[pair] = freq.get(pair, 0) + cnt
+            loc.get(pair, []).append(i)
+
+    return (freq, loc)
+
+
+def merge(pretoks: dict[tuple[bytes, ...], int], vocab_size: int, vocab: dict[int, bytes]) -> list[tuple[bytes, bytes]]:
     merges: list[tuple[bytes, bytes]] = []
 
-    while len(vocab) < vocab_size:
-        frequency: dict[tuple[bytes, bytes], int] = {}
-        for tokens, cnt in pretokens.items():
-            for token, next_token in itertools.pairwise(tokens):
-                pair = (token, next_token)
-                frequency[pair] = frequency.get(pair, 0) + cnt
 
-        # find top occurency
-        pair_max = find_top_occurence(frequency)
+    while len(vocab) < vocab_size:
+        freq, _ = record_pairs(pretoks)
+
+        # find most frequent pair
+        pair_max = find_top_freq(freq)
         merges.append(pair_max)
         # vocab part 3: merges
         vocab[len(vocab)] = pair_max[0] + pair_max[1]
 
-        new_pretokens: dict[tuple[bytes, ...], int] = {}
-        for tokens, cnt in pretokens.items():
+        new_pretoks: dict[tuple[bytes, ...], int] = {}
+        for tokens, cnt in pretoks.items():
             new_tokens = merge_pair(tokens, pair_max)
-            new_pretokens[new_tokens] = cnt
-        pretokens = new_pretokens
+            new_pretoks[new_tokens] = cnt
+        pretoks = new_pretoks
 
     return merges
 
