@@ -1,8 +1,21 @@
 import json
+import os
 import time
+
+import pytest
 
 from .adapters import run_train_bpe
 from .common import FIXTURES_PATH, gpt2_bytes_to_unicode
+
+DATA_PATH = FIXTURES_PATH.parent.parent / "data"
+LARGE_DATASETS = {
+    "tinystories": DATA_PATH / "TinyStoriesV2-GPT4-train.txt",
+    "openwebtext": DATA_PATH / "owt_train.txt",
+}
+LARGE_VOCAB_SIZE = {
+    "tinystories": 10_000,
+    "openwebtext": 32_000,
+}
 
 
 def test_train_bpe_speed():
@@ -87,3 +100,46 @@ def test_train_bpe_special_tokens(snapshot):
             "merges": merges,
         },
     )
+
+
+def test_train_bpe_large_dataset():
+    """Train on a full dataset when BPE_DATASET selects a configured corpus.
+
+    Run one of:
+    BPE_DATASET=tinystories uv run pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
+    BPE_DATASET=openwebtext uv run pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
+    """
+    dataset_name = os.environ.get("BPE_DATASET")
+    if dataset_name is None:
+        pytest.skip("Set BPE_DATASET=tinystories or BPE_DATASET=openwebtext")
+
+    dataset_name = dataset_name.lower()
+    if dataset_name not in LARGE_DATASETS:
+        pytest.fail(
+            f"Unknown BPE_DATASET={dataset_name!r}; "
+            f"choose one of {sorted(LARGE_DATASETS)}"
+        )
+
+    input_path = LARGE_DATASETS[dataset_name]
+    if not input_path.is_file():
+        pytest.fail(f"Dataset does not exist: {input_path}")
+
+    vocab_size = LARGE_VOCAB_SIZE[dataset_name]
+    special_token = "<|endoftext|>"
+
+    start_time = time.perf_counter()
+    vocab, merges = run_train_bpe(
+        input_path=input_path,
+        vocab_size=vocab_size,
+        special_tokens=[special_token],
+    )
+    train_time = time.perf_counter() - start_time
+
+    print(
+        f"\n{dataset_name}: trained {len(vocab):,} tokens and "
+        f"{len(merges):,} merges in {train_time:.2f} seconds"
+    )
+
+    assert len(vocab) == vocab_size
+    assert special_token.encode("utf-8") in vocab.values()
+    assert len(merges) == vocab_size - 256 - 1
