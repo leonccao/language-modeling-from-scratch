@@ -104,9 +104,10 @@ def record_pairs(
     return (freq, loc)
 
 
-def merge(pretoks: dict[tuple[bytes, ...], int], vocab_size: int, vocab: dict[int, bytes]) -> list[tuple[bytes, bytes]]:
+def merge(
+    pretoks: dict[tuple[bytes, ...], int], vocab_size: int, vocab: dict[int, bytes]
+) -> list[tuple[bytes, bytes]]:
     merges: list[tuple[bytes, bytes]] = []
-
 
     while len(vocab) < vocab_size:
         freq, _ = record_pairs(pretoks)
@@ -127,7 +128,9 @@ def merge(pretoks: dict[tuple[bytes, ...], int], vocab_size: int, vocab: dict[in
 
 
 def tokenization(chunk: str, special_tokens: list[str]) -> dict[tuple[bytes, ...], int]:
-    split_chunks: list[str] = re.split("|".join(re.escape(token) for token in special_tokens), chunk)
+    split_chunks: list[str] = re.split(
+        "|".join(re.escape(token) for token in special_tokens), chunk
+    )
 
     pretokens: dict[tuple[bytes, ...], int] = {}
     for split_chunk in split_chunks:
@@ -149,7 +152,9 @@ def train_bpe(
 
     with open(input_path, "rb") as f:
         num_processes = PROCESSES_NUM
-        special_tokens_bytes: list[bytes] = [special_token.encode("utf-8") for special_token in special_tokens]
+        special_tokens_bytes: list[bytes] = [
+            special_token.encode("utf-8") for special_token in special_tokens
+        ]
         boundaries = find_chunk_boundaries(f, num_processes, special_tokens_bytes)
 
         # The following is a serial implementation, but you can parallelize this
@@ -161,7 +166,9 @@ def train_bpe(
             chunks.append(chunk)
 
         with Pool(processes=num_processes) as pool:
-            partial_tokens = pool.starmap(tokenization, zip(chunks, itertools.repeat(special_tokens)))
+            partial_tokens = pool.starmap(
+                tokenization, zip(chunks, itertools.repeat(special_tokens))
+            )
 
         pretokens: dict[tuple[bytes, ...], int] = {}
         for partial in partial_tokens:
@@ -174,7 +181,9 @@ def train_bpe(
         """
 
         # vocab part 1: ascii
-        vocab: dict[int, bytes] = {token_id: bytes([token_id]) for token_id in range(256)}
+        vocab: dict[int, bytes] = {
+            token_id: bytes([token_id]) for token_id in range(256)
+        }
         # vocab part 2: special tokens
         for spec_token in special_tokens:
             vocab[len(vocab)] = spec_token.encode("utf-8")
