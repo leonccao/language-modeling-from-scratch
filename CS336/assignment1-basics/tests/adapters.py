@@ -569,6 +569,7 @@ def run_train_bpe(
     vocab_size: int,
     special_tokens: list[str],
     output_path: str | os.PathLike | None = None,
+    show_progress: bool = False,
     **kwargs,
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
     """Given the path to an input corpus, run train a BPE tokenizer and
@@ -583,6 +584,7 @@ def run_train_bpe(
             they are treated as any other string.
         output_path (str | os.PathLike | None): Optional directory for writing
             vocab.txt and merges.txt. No files are written when omitted.
+        show_progress (bool): Display pre-tokenization and merge progress when true.
 
     Returns:
         tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
@@ -594,7 +596,9 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-    vocab, merges = train_bpe(input_path, vocab_size, special_tokens)
+    vocab, merges = train_bpe(
+        input_path, vocab_size, special_tokens, show_progress=show_progress
+    )
     if output_path is not None:
         write_bpe_outputs(vocab, merges, output_path)
     return vocab, merges

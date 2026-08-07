@@ -11,14 +11,17 @@ DATA_PATH = FIXTURES_PATH.parent.parent / "data"
 OUTPUT_PATH = FIXTURES_PATH.parent.parent / "outputs"
 LARGE_DATASETS = {
     "tinystories": DATA_PATH / "TinyStoriesV2-GPT4-train.txt",
+    "tinystories_sample": FIXTURES_PATH / "tinystories_sample_5M.txt",
     "openwebtext": DATA_PATH / "owt_train.txt",
 }
 LARGE_VOCAB_SIZE = {
     "tinystories": 10_000,
+    "tinystories_sample": 10_000,
     "openwebtext": 32_000,
 }
 LARGE_OUTPUT_PATHS = {
     "tinystories": OUTPUT_PATH / "TinyStories",
+    "tinystories_sample": OUTPUT_PATH / "TinyStories_Sample",
     "openwebtext": OUTPUT_PATH / "OpenWebText",
 }
 
@@ -81,16 +84,20 @@ def test_train_bpe():
     assert set(vocab.values()) == set(reference_vocab.values())
 
 
-def test_train_bpe_writes_outputs(tmp_path):
+def test_train_bpe_writes_outputs(tmp_path, capsys):
     run_train_bpe(
         input_path=FIXTURES_PATH / "corpus.en",
         vocab_size=258,
         special_tokens=["<|endoftext|>"],
         output_path=tmp_path,
+        show_progress=True,
     )
 
+    captured = capsys.readouterr()
     assert (tmp_path / "vocab.txt").is_file()
     assert (tmp_path / "merges.txt").is_file()
+    assert "Pre-tokenizing" in captured.err
+    assert "Merging pairs" in captured.err
 
 
 def test_train_bpe_special_tokens(snapshot):
@@ -124,6 +131,7 @@ def test_train_bpe_large_dataset():
 
     Run without profiling:
     BPE_DATASET=tinystories uv run pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
+    BPE_DATASET=tinystories_sample uv run pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
     BPE_DATASET=openwebtext uv run pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
 
     Record unprofiled wall time and peak memory on macOS:
@@ -131,12 +139,15 @@ def test_train_bpe_large_dataset():
     /usr/bin/time -l -o outputs/time-memory-tinystories.txt env BPE_DATASET=tinystories uv run pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
     /usr/bin/time -l -o outputs/time-memory-openwebtext.txt env BPE_DATASET=openwebtext uv run pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
 
-    Profile line-level CPU and memory bottlenecks with Scalene:
-    BPE_DATASET=tinystories uv run --with scalene scalene run --memory --profile-only tokenizer.py,test_train_bpe.py -o outputs/scalene-tinystories.json -m pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
-    BPE_DATASET=openwebtext uv run --with scalene scalene run --memory --profile-only tokenizer.py,test_train_bpe.py -o outputs/scalene-openwebtext.json -m pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
+    Profile line-level CPU bottlenecks with Scalene:
+    uv run --with scalene scalene run --cpu-only --use-legacy-tracer --profile-only tokenizer.py --cpu-percent-threshold 0 -o outputs/scalene-cpu-tinystories.json cs336_basics/tokenizer.py --input-path data/TinyStoriesV2-GPT4-train.txt --vocab-size 10000 --special-token '<|endoftext|>' --output-path outputs/TinyStories
+    uv run --with scalene scalene run --cpu-only --use-legacy-tracer --profile-only tokenizer.py --cpu-percent-threshold 0 -o outputs/scalene-cpu-tinystories-sample.json cs336_basics/tokenizer.py --input-path tests/fixtures/tinystories_sample_5M.txt --vocab-size 10000 --special-token '<|endoftext|>' --output-path outputs/TinyStories_Sample
+    uv run --with scalene scalene run --cpu-only --use-legacy-tracer --profile-only tokenizer.py --cpu-percent-threshold 0 -o outputs/scalene-cpu-openwebtext.json cs336_basics/tokenizer.py --input-path data/owt_train.txt --vocab-size 32000 --special-token '<|endoftext|>' --output-path outputs/OpenWebText
 
     View a reduced profile in the terminal:
-    uv run --with scalene scalene view --cli -r outputs/scalene-tinystories.json
+    uv run --with scalene scalene view --cli -r outputs/scalene-cpu-tinystories.json
+    uv run --with scalene scalene view --cli -r outputs/scalene-cpu-tinystories-sample.json
+    uv run --with scalene scalene view --cli -r outputs/scalene-cpu-openwebtext.json
     """
     dataset_name = os.environ.get("BPE_DATASET")
     if dataset_name is None:
@@ -162,6 +173,7 @@ def test_train_bpe_large_dataset():
         vocab_size=vocab_size,
         special_tokens=[special_token],
         output_path=LARGE_OUTPUT_PATHS[dataset_name],
+        show_progress=True,
     )
     train_time = time.perf_counter() - start_time
 

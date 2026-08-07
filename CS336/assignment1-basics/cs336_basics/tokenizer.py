@@ -2,16 +2,18 @@ import argparse
 import itertools
 import os
 from collections.abc import Iterator
+from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
 from typing import BinaryIO
 
 import regex as re
+from tqdm import tqdm
 
 DEBUG = False
 
 PATTERN = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-PROCESSES_NUM = 4
+PROCESSES_NUM = 8
 
 
 def find_chunk_boundaries(
@@ -185,9 +187,19 @@ def merge(
     pretoks: dict[int, tuple[tuple[bytes, ...], int]],
     vocab_size: int,
     vocab: dict[int, bytes],
+    show_progress: bool = False,
 ) -> list[tuple[bytes, bytes]]:
     merges: list[tuple[bytes, bytes]] = []
     freq, aprs = record_pairs(pretoks)
+    progress = (
+        tqdm(
+            total=max(vocab_size - len(vocab), 0),
+            desc="Merging pairs",
+            unit="merge",
+        )
+        if show_progress
+        else None
+    )
 
     while len(vocab) < vocab_size:
         # find most frequent pair
@@ -215,30 +227,43 @@ def merge(
             new_tokens = merge_pairs(pretok_id, tokens, cnt, pair_max, freq, aprs)
             pretoks[pretok_id] = (new_tokens, cnt)
 
+        if progress is not None:
+            progress.update()
+
+    if progress is not None:
+        progress.close()
+
     return merges
 
 
-def tokenization(chunk: str, special_tokens: list[str]) -> dict[tuple[bytes, ...], int]:
-    split_chunks: list[str] = re.split(
-        "|".join(re.escape(token) for token in special_tokens), chunk
-    )
+def tokenization(
+    chunk: tuple[int, int], input_path: Path, special_tokens: list[str]
+) -> dict[bytes, int]:
+    with open(input_path, "rb") as f:
+        start, end = chunk
+        f.seek(start)
+        chunk_bytes = f.read(end - start).decode("utf-8", errors="ignore")
 
-    pretokens: dict[tuple[bytes, ...], int] = {}
-    for split_chunk in split_chunks:
-        # Run pre-tokenization on your chunk and store the counts for each pre-token
-        matches = regex_match(split_chunk)
-        for match in matches:
-            pretoken_str = match.group()
-            encoded = pretoken_str.encode("utf-8")
-            byte_tokens = tuple(bytes([byte]) for byte in encoded)
-            pretokens[byte_tokens] = pretokens.get(byte_tokens, 0) + 1
-    return pretokens
+        split_chunks: Iterator[str] = re.splititer(
+            "|".join(re.escape(token) for token in special_tokens), chunk_bytes
+        )
+
+        pretokens: dict[bytes, int] = {}
+        for split_chunk in split_chunks:
+            # Run pre-tokenization on your chunk and store the counts for each pre-token
+            matches = regex_match(split_chunk)
+            for match in matches:
+                pretoken_str = match.group()
+                pretok = pretoken_str.encode("utf-8")
+                pretokens[pretok] = pretokens.get(pretok, 0) + 1
+        return pretokens
 
 
 def train_bpe(
     input_path: str | os.PathLike,
     vocab_size: int,
     special_tokens: list[str],
+    show_progress: bool = False,
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
 
     with open(input_path, "rb") as f:
@@ -250,24 +275,41 @@ def train_bpe(
 
         # The following is a serial implementation, but you can parallelize this
         # by sending each start/end pair to a set of processes.
-        chunks: list[str] = []
+        chunks: list[tuple[int, int]] = []
         for start, end in itertools.pairwise(boundaries):
-            f.seek(start)
-            chunk = f.read(end - start).decode("utf-8", errors="ignore")
-            chunks.append(chunk)
+            chunks.append((start, end))
 
         with Pool(processes=num_processes) as pool:
-            partial_tokens = pool.starmap(
-                tokenization, zip(chunks, itertools.repeat(special_tokens))
-            )
+            if show_progress:
+                tokenize = partial(
+                    tokenization, input_path=input_path, special_tokens=special_tokens
+                )
+                partial_tokens = list(
+                    tqdm(
+                        pool.imap(tokenize, chunks),
+                        total=len(chunks),
+                        desc="Pre-tokenizing",
+                        unit="chunk",
+                    )
+                )
+            else:
+                partial_tokens = pool.starmap(
+                    tokenization,
+                    zip(
+                        chunks,
+                        itertools.repeat(input_path),
+                        itertools.repeat(special_tokens),
+                    ),
+                )
 
-        pretoks_dict: dict[tuple[bytes, ...], int] = {}
-        for partial in partial_tokens:
-            for tokens, count in partial.items():
+        pretoks_dict: dict[bytes, int] = {}
+        for partial_result in partial_tokens:
+            for tokens, count in partial_result.items():
                 pretoks_dict[tokens] = pretoks_dict.get(tokens, 0) + count
         pretoks: dict[int, tuple[tuple[bytes, ...], int]] = {}
         for tokens, cnt in pretoks_dict.items():
-            pretoks[len(pretoks)] = (tokens, cnt)
+            byte_tokens = tuple(bytes([byte]) for byte in tokens)
+            pretoks[len(pretoks)] = (byte_tokens, cnt)
 
         """
         if DEBUG:
@@ -281,7 +323,9 @@ def train_bpe(
         # vocab part 2: special tokens
         for spec_token in special_tokens:
             vocab[len(vocab)] = spec_token.encode("utf-8")
-        merges: list[tuple[bytes, bytes]] = merge(pretoks, vocab_size, vocab)
+        merges: list[tuple[bytes, bytes]] = merge(
+            pretoks, vocab_size, vocab, show_progress=show_progress
+        )
 
         """
         if DEBUG:
@@ -349,6 +393,7 @@ def main() -> None:
         input_path=args.input_path,
         vocab_size=args.vocab_size,
         special_tokens=args.special_token,
+        show_progress=True,
     )
     write_bpe_outputs(vocab, merges, args.output_path)
 
