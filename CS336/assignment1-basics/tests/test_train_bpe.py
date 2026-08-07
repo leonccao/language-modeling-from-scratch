@@ -122,9 +122,21 @@ def test_train_bpe_special_tokens(snapshot):
 def test_train_bpe_large_dataset():
     """Train on a full dataset when BPE_DATASET selects a configured corpus.
 
-    Run one of:
+    Run without profiling:
     BPE_DATASET=tinystories uv run pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
     BPE_DATASET=openwebtext uv run pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
+
+    Record unprofiled wall time and peak memory on macOS:
+    mkdir -p outputs
+    /usr/bin/time -l -o outputs/time-memory-tinystories.txt env BPE_DATASET=tinystories uv run pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
+    /usr/bin/time -l -o outputs/time-memory-openwebtext.txt env BPE_DATASET=openwebtext uv run pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
+
+    Profile line-level CPU and memory bottlenecks with Scalene:
+    BPE_DATASET=tinystories uv run --with scalene scalene run --memory --profile-only tokenizer.py,test_train_bpe.py -o outputs/scalene-tinystories.json -m pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
+    BPE_DATASET=openwebtext uv run --with scalene scalene run --memory --profile-only tokenizer.py,test_train_bpe.py -o outputs/scalene-openwebtext.json -m pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
+
+    View a reduced profile in the terminal:
+    uv run --with scalene scalene view --cli -r outputs/scalene-tinystories.json
     """
     dataset_name = os.environ.get("BPE_DATASET")
     if dataset_name is None:
