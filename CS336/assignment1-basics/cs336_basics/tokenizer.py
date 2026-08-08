@@ -1,7 +1,9 @@
 import argparse
+import heapq
 import itertools
 import os
 from collections.abc import Iterator
+from dataclasses import dataclass
 from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
@@ -13,7 +15,19 @@ from tqdm import tqdm
 DEBUG = False
 
 PATTERN = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-PROCESSES_NUM = 8
+WORKERS_NUM = 4
+CHUNKS_NUM = 128
+
+Pair = tuple[bytes, bytes]
+
+
+@dataclass(frozen=True, slots=True)
+class MaxPair:
+    frequency: int
+    pair: Pair
+
+    def __lt__(self, other: "MaxPair") -> bool:
+        return (self.frequency, self.pair) > (other.frequency, other.pair)
 
 
 def find_chunk_boundaries(
@@ -70,19 +84,33 @@ def regex_match(
     return re.finditer(PATTERN, text)
 
 
-def find_top_freq(
-    frequency: dict[tuple[bytes, bytes], int],
-) -> tuple[tuple[bytes, bytes], int]:
-    pair_max, freq_max = max(frequency.items(), key=lambda item: (item[1], item[0]))
-    return (pair_max, freq_max)
+def heap_pop_valid_max(
+    heap: list[MaxPair],
+    freq: dict[Pair, int],
+) -> MaxPair:
+    while len(heap) > 0:
+        cand = heapq.heappop(heap)
+        if freq.get(cand.pair) == cand.frequency:
+            return cand
+
+
+def heap_push_new_freq(
+    heap: list[MaxPair],
+    freq: dict[Pair, int],
+    pair: Pair,
+) -> None:
+    cnt = freq.get(pair)
+    if cnt is not None:
+        heapq.heappush(heap, MaxPair(cnt, pair))
 
 
 def dec_pair(
     pretok_id: int,
     cnt: int,
-    pair: tuple[bytes, bytes],
-    freq: dict[tuple[bytes, bytes], int],
-    aprs: dict[tuple[bytes, bytes], dict[int, int]],
+    pair: Pair,
+    freq: dict[Pair, int],
+    aprs: dict[Pair, dict[int, int]],
+    dirty_pairs: set[Pair]
 ):
     if DEBUG:
         print("pretok_id")
@@ -98,6 +126,7 @@ def dec_pair(
     new_freq = freq.pop(pair) - cnt
     if new_freq > 0:
         freq[pair] = new_freq
+    dirty_pairs.add(pair)
 
     aprs_dict: dict[int, int] = aprs.pop(pair)
     new_aprs_cnt = aprs_dict.pop(pretok_id) - cnt
@@ -110,11 +139,13 @@ def dec_pair(
 def inc_pair(
     pretok_id: int,
     cnt: int,
-    pair: tuple[bytes, bytes],
-    freq: dict[tuple[bytes, bytes], int],
-    aprs: dict[tuple[bytes, bytes], dict[int, int]],
+    pair: Pair,
+    freq: dict[Pair, int],
+    aprs: dict[Pair, dict[int, int]],
+    dirty_pairs: set[Pair]
 ):
     freq[pair] = freq.get(pair, 0) + cnt
+    dirty_pairs.add(pair)
 
     aprs_dict: dict[int, int] = aprs.get(pair, {})
     aprs_dict[pretok_id] = aprs_dict.get(pretok_id, 0) + cnt
@@ -125,9 +156,10 @@ def merge_pairs(
     pretok_id: int,
     tokens: tuple[bytes, ...],
     cnt: int,
-    pair_max: tuple[bytes, bytes],
-    freq: dict[tuple[bytes, bytes], int],
-    aprs: dict[tuple[bytes, bytes], dict[int, int]],
+    pair_max: Pair,
+    freq: dict[Pair, int],
+    aprs: dict[Pair, dict[int, int]],
+    dirty_pairs: set[Pair],
 ) -> tuple[bytes, ...]:
     if DEBUG:
         print("tokens")
@@ -144,13 +176,17 @@ def merge_pairs(
             result.append(token_mergerd)
 
             # update freq and appears
-            dec_pair(pretok_id, cnt, (tokens[i], tokens[i + 1]), freq, aprs)
+            dec_pair(pretok_id, cnt, (tokens[i], tokens[i + 1]), freq, aprs, dirty_pairs)
             if i > 0:
-                dec_pair(pretok_id, cnt, (last_token, tokens[i]), freq, aprs)
-                inc_pair(pretok_id, cnt, (last_token, token_mergerd), freq, aprs)
+                dec_pair(pretok_id, cnt, (last_token, tokens[i]), freq, aprs, dirty_pairs)
+                inc_pair(pretok_id, cnt, (last_token, token_mergerd), freq, aprs, dirty_pairs)
             if i + 2 < len(tokens):
-                dec_pair(pretok_id, cnt, (tokens[i + 1], tokens[i + 2]), freq, aprs)
-                inc_pair(pretok_id, cnt, (token_mergerd, tokens[i + 2]), freq, aprs)
+                dec_pair(
+                    pretok_id, cnt, (tokens[i + 1], tokens[i + 2]), freq, aprs, dirty_pairs
+                )
+                inc_pair(
+                    pretok_id, cnt, (token_mergerd, tokens[i + 2]), freq, aprs, dirty_pairs
+                )
 
             last_token = token_mergerd
             i += 2
@@ -165,11 +201,11 @@ def merge_pairs(
 def record_pairs(
     pretoks: dict[int, tuple[tuple[bytes, ...], int]],
 ) -> tuple[
-    dict[tuple[bytes, bytes], int],
-    dict[tuple[bytes, bytes], dict[int, int]],
+    dict[Pair, int],
+    dict[Pair, dict[int, int]],
 ]:
-    freq: dict[tuple[bytes, bytes], int] = {}
-    aprs: dict[tuple[bytes, bytes], dict[int, int]] = {}
+    freq: dict[Pair, int] = {}
+    aprs: dict[Pair, dict[int, int]] = {}
 
     for pretok_id, (tokens, cnt) in pretoks.items():
         for i in range(len(tokens) - 1):
@@ -188,8 +224,8 @@ def merge(
     vocab_size: int,
     vocab: dict[int, bytes],
     show_progress: bool = False,
-) -> list[tuple[bytes, bytes]]:
-    merges: list[tuple[bytes, bytes]] = []
+) -> list[Pair]:
+    merges: list[Pair] = []
     freq, aprs = record_pairs(pretoks)
     progress = (
         tqdm(
@@ -201,9 +237,13 @@ def merge(
         else None
     )
 
+    heap = [MaxPair(cnt, pair) for pair, cnt in freq.items()]
+    heapq.heapify(heap)
+
     while len(vocab) < vocab_size:
         # find most frequent pair
-        pair_max, _ = find_top_freq(freq)
+        valid_max = heap_pop_valid_max(heap, freq)
+        pair_max = valid_max.pair
 
         if DEBUG:
             print("pair_max")
@@ -222,10 +262,13 @@ def merge(
             print("aprs_pretoks")
             print(aprs_pretoks)
 
+        dirty_pairs: set[Pair] = set()
         for pretok_id in aprs_pretoks:
             tokens, cnt = pretoks.pop(pretok_id)
-            new_tokens = merge_pairs(pretok_id, tokens, cnt, pair_max, freq, aprs)
+            new_tokens = merge_pairs(pretok_id, tokens, cnt, pair_max, freq, aprs, dirty_pairs)
             pretoks[pretok_id] = (new_tokens, cnt)
+        for pair in dirty_pairs:
+            heap_push_new_freq(heap, freq, pair)
 
         if progress is not None:
             progress.update()
@@ -264,14 +307,13 @@ def train_bpe(
     vocab_size: int,
     special_tokens: list[str],
     show_progress: bool = False,
-) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
+) -> tuple[dict[int, bytes], list[Pair]]:
 
     with open(input_path, "rb") as f:
-        num_processes = PROCESSES_NUM
         special_tokens_bytes: list[bytes] = [
             special_token.encode("utf-8") for special_token in special_tokens
         ]
-        boundaries = find_chunk_boundaries(f, num_processes, special_tokens_bytes)
+        boundaries = find_chunk_boundaries(f, CHUNKS_NUM, special_tokens_bytes)
 
         # The following is a serial implementation, but you can parallelize this
         # by sending each start/end pair to a set of processes.
@@ -279,7 +321,7 @@ def train_bpe(
         for start, end in itertools.pairwise(boundaries):
             chunks.append((start, end))
 
-        with Pool(processes=num_processes) as pool:
+        with Pool(processes=WORKERS_NUM) as pool:
             if show_progress:
                 tokenize = partial(
                     tokenization, input_path=input_path, special_tokens=special_tokens
@@ -323,7 +365,7 @@ def train_bpe(
         # vocab part 2: special tokens
         for spec_token in special_tokens:
             vocab[len(vocab)] = spec_token.encode("utf-8")
-        merges: list[tuple[bytes, bytes]] = merge(
+        merges: list[Pair] = merge(
             pretoks, vocab_size, vocab, show_progress=show_progress
         )
 
@@ -345,7 +387,7 @@ uv run cs336_basics/tokenizer.py --input-path tests/fixtures/tinystories_sample_
 
 def write_bpe_outputs(
     vocab: dict[int, bytes],
-    merges: list[tuple[bytes, bytes]],
+    merges: list[Pair],
     output_path: str | os.PathLike,
 ) -> None:
     """Write a trained BPE vocabulary and merge list to an output directory."""
