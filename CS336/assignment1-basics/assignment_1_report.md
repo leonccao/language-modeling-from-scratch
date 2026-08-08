@@ -32,3 +32,19 @@ for approximately 74% of the CPU profile. After deferring that conversion, the
 main remaining cost was regex matching and extracting each match: the
 `tokenization` function accounted for approximately 68% of the optimized CPU
 profile. BPE merging took about 29 seconds and was not the primary bottleneck.
+
+## train_bpe_expts_owt (a)
+
+I trained and serialized a 32,000-token OpenWebText BPE vocabulary; its longest
+token was `b'\xc3\x83\xc3\x82' * 16` (64 bytes), which decodes to the mojibake
+pattern `ÃÂ` repeated 16 times. It is not linguistically meaningful, but it makes
+sense statistically because repeated encoding artifacts in the web corpus are
+patterns that BPE can merge.
+
+## train_bpe_expts_owt (b)
+
+The TinyStories tokenizer learns simpler English vocabulary shaped by its
+focused story domain, whereas the OpenWebText tokenizer learns a wider range of
+vocabulary from more varied web content. OpenWebText also contains more
+multilingual fragments and encoding artifacts, making its learned vocabulary
+broader and noisier.
