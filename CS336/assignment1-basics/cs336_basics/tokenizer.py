@@ -16,6 +16,7 @@ PATTERN = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S
 WORKERS_NUM = 4
 CHUNKS_NUM = 128
 
+Pair = tuple[bytes, bytes]
 
 def find_chunk_boundaries(
     file: BinaryIO,
@@ -72,8 +73,8 @@ def regex_match(
 
 
 def find_top_freq(
-    frequency: dict[tuple[bytes, bytes], int],
-) -> tuple[tuple[bytes, bytes], int]:
+    frequency: dict[Pair, int],
+) -> tuple[Pair, int]:
     pair_max, freq_max = max(frequency.items(), key=lambda item: (item[1], item[0]))
     return (pair_max, freq_max)
 
@@ -81,9 +82,9 @@ def find_top_freq(
 def dec_pair(
     pretok_id: int,
     cnt: int,
-    pair: tuple[bytes, bytes],
-    freq: dict[tuple[bytes, bytes], int],
-    aprs: dict[tuple[bytes, bytes], dict[int, int]],
+    pair: Pair,
+    freq: dict[Pair, int],
+    aprs: dict[Pair, dict[int, int]],
 ):
     if DEBUG:
         print("pretok_id")
@@ -111,9 +112,9 @@ def dec_pair(
 def inc_pair(
     pretok_id: int,
     cnt: int,
-    pair: tuple[bytes, bytes],
-    freq: dict[tuple[bytes, bytes], int],
-    aprs: dict[tuple[bytes, bytes], dict[int, int]],
+    pair: Pair,
+    freq: dict[Pair, int],
+    aprs: dict[Pair, dict[int, int]],
 ):
     freq[pair] = freq.get(pair, 0) + cnt
 
@@ -126,9 +127,9 @@ def merge_pairs(
     pretok_id: int,
     tokens: tuple[bytes, ...],
     cnt: int,
-    pair_max: tuple[bytes, bytes],
-    freq: dict[tuple[bytes, bytes], int],
-    aprs: dict[tuple[bytes, bytes], dict[int, int]],
+    pair_max: Pair,
+    freq: dict[Pair, int],
+    aprs: dict[Pair, dict[int, int]],
 ) -> tuple[bytes, ...]:
     if DEBUG:
         print("tokens")
@@ -166,11 +167,11 @@ def merge_pairs(
 def record_pairs(
     pretoks: dict[int, tuple[tuple[bytes, ...], int]],
 ) -> tuple[
-    dict[tuple[bytes, bytes], int],
-    dict[tuple[bytes, bytes], dict[int, int]],
+    dict[Pair, int],
+    dict[Pair, dict[int, int]],
 ]:
-    freq: dict[tuple[bytes, bytes], int] = {}
-    aprs: dict[tuple[bytes, bytes], dict[int, int]] = {}
+    freq: dict[Pair, int] = {}
+    aprs: dict[Pair, dict[int, int]] = {}
 
     for pretok_id, (tokens, cnt) in pretoks.items():
         for i in range(len(tokens) - 1):
@@ -189,8 +190,8 @@ def merge(
     vocab_size: int,
     vocab: dict[int, bytes],
     show_progress: bool = False,
-) -> list[tuple[bytes, bytes]]:
-    merges: list[tuple[bytes, bytes]] = []
+) -> list[Pair]:
+    merges: list[Pair] = []
     freq, aprs = record_pairs(pretoks)
     progress = (
         tqdm(
@@ -265,7 +266,7 @@ def train_bpe(
     vocab_size: int,
     special_tokens: list[str],
     show_progress: bool = False,
-) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
+) -> tuple[dict[int, bytes], list[Pair]]:
 
     with open(input_path, "rb") as f:
         special_tokens_bytes: list[bytes] = [
@@ -323,7 +324,7 @@ def train_bpe(
         # vocab part 2: special tokens
         for spec_token in special_tokens:
             vocab[len(vocab)] = spec_token.encode("utf-8")
-        merges: list[tuple[bytes, bytes]] = merge(
+        merges: list[Pair] = merge(
             pretoks, vocab_size, vocab, show_progress=show_progress
         )
 
@@ -345,7 +346,7 @@ uv run cs336_basics/tokenizer.py --input-path tests/fixtures/tinystories_sample_
 
 def write_bpe_outputs(
     vocab: dict[int, bytes],
-    merges: list[tuple[bytes, bytes]],
+    merges: list[Pair],
     output_path: str | os.PathLike,
 ) -> None:
     """Write a trained BPE vocabulary and merge list to an output directory."""
