@@ -9,7 +9,7 @@ from pathlib import Path
 import regex as re
 from tqdm import tqdm
 
-from cs336_basics.pretokenization import find_chunk_boundaries, regex_match
+from cs336_basics.pretokenization import find_chunk_boundaries, pretoken_iterable
 
 DEBUG = False
 
@@ -200,7 +200,7 @@ def tokenization(
         pretokens: dict[bytes, int] = {}
         for split_chunk in split_chunks:
             # Run pre-tokenization on your chunk and store the counts for each pre-token
-            matches = regex_match(split_chunk)
+            matches = pretoken_iterable(split_chunk)
             for match in matches:
                 pretoken_str = match.group()
                 pretok = pretoken_str.encode("utf-8")
