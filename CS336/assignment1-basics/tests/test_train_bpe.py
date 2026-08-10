@@ -140,9 +140,9 @@ def test_train_bpe_large_dataset():
     /usr/bin/time -l -o outputs/time-memory-openwebtext.txt env BPE_DATASET=openwebtext uv run pytest tests/test_train_bpe.py::test_train_bpe_large_dataset -s
 
     Profile line-level CPU bottlenecks with Scalene:
-    uv run --with scalene scalene run --cpu-only --use-legacy-tracer --profile-only tokenizer.py --cpu-percent-threshold 0 -o outputs/scalene-cpu-tinystories.json cs336_basics/tokenizer.py --input-path data/TinyStoriesV2-GPT4-train.txt --vocab-size 10000 --special-token '<|endoftext|>' --output-path outputs/TinyStories
-    uv run --with scalene scalene run --cpu-only --use-legacy-tracer --profile-only tokenizer.py --cpu-percent-threshold 0 -o outputs/scalene-cpu-tinystories-sample.json cs336_basics/tokenizer.py --input-path tests/fixtures/tinystories_sample_5M.txt --vocab-size 10000 --special-token '<|endoftext|>' --output-path outputs/TinyStories_Sample
-    uv run --with scalene scalene run --cpu-only --use-legacy-tracer --profile-only tokenizer.py --cpu-percent-threshold 0 -o outputs/scalene-cpu-openwebtext.json cs336_basics/tokenizer.py --input-path data/owt_train.txt --vocab-size 32000 --special-token '<|endoftext|>' --output-path outputs/OpenWebText
+    uv run --with scalene scalene run --cpu-only --use-legacy-tracer --profile-only train_bpe.py --cpu-percent-threshold 0 -o outputs/scalene-cpu-tinystories.json cs336_basics/train_bpe.py --input-path data/TinyStoriesV2-GPT4-train.txt --vocab-size 10000 --special-token '<|endoftext|>' --output-path outputs/TinyStories
+    uv run --with scalene scalene run --cpu-only --use-legacy-tracer --profile-only train_bpe.py --cpu-percent-threshold 0 -o outputs/scalene-cpu-tinystories-sample.json cs336_basics/train_bpe.py --input-path tests/fixtures/tinystories_sample_5M.txt --vocab-size 10000 --special-token '<|endoftext|>' --output-path outputs/TinyStories_Sample
+    uv run --with scalene scalene run --cpu-only --use-legacy-tracer --profile-only train_bpe.py --cpu-percent-threshold 0 -o outputs/scalene-cpu-openwebtext.json cs336_basics/train_bpe.py --input-path data/owt_train.txt --vocab-size 32000 --special-token '<|endoftext|>' --output-path outputs/OpenWebText
 
     View a reduced profile in the terminal:
     uv run --with scalene scalene view --cli -r outputs/scalene-cpu-tinystories.json

@@ -338,9 +338,9 @@ def train_bpe(
 
 
 """
-uv run cs336_basics/tokenizer.py --input-path tests/fixtures/corpus.en --vocab-size 500 --special-token '<|endoftext|>'
-uv run cs336_basics/tokenizer.py --input-path tests/fixtures/tinystories_sample.txt --vocab-size 500 --special-token '<|endoftext|>' --output-path outputs/tinystories
-uv run cs336_basics/tokenizer.py --input-path tests/fixtures/tinystories_sample_5M.txt --vocab-size 10000 --special-token '<|endoftext|>'
+uv run cs336_basics/train_bpe.py --input-path tests/fixtures/corpus.en --vocab-size 500 --special-token '<|endoftext|>'
+uv run cs336_basics/train_bpe.py --input-path tests/fixtures/tinystories_sample.txt --vocab-size 500 --special-token '<|endoftext|>' --output-path outputs/tinystories
+uv run cs336_basics/train_bpe.py --input-path tests/fixtures/tinystories_sample_5M.txt --vocab-size 10000 --special-token '<|endoftext|>'
 """
 
 
