@@ -55,5 +55,5 @@ def find_chunk_boundaries(
     return sorted(set(chunk_boundaries))
 
 
-def pretoken_iterable(text: str) -> Iterator[re.Match[str]]:
+def pretoken_match(text: str) -> Iterator[re.Match[str]]:
     return re.finditer(PATTERN, text)
