@@ -5,11 +5,13 @@ import regex as re
 
 from cs336_basics.pretokenization import pretoken_match
 
+DEBUG = True
+
 
 class Tokenizer:
     id_to_token: dict[int, bytes]
     token_to_id: dict[bytes, int]
-    merges: list[tuple[bytes, bytes]]
+    merges: dict[tuple[bytes, bytes], int]
     special_tokens: list[str]
 
     def __init__(
@@ -19,8 +21,11 @@ class Tokenizer:
         special_tokens: list[str] | None = None,
     ):
         self.id_to_token = vocab
-        self.token_to_id: dict[bytes, int] = {token: id for id, token in vocab.items()}
-        self.merges = merges
+        self.token_to_id = {token: id for id, token in vocab.items()}
+        self.merges = {}
+        for merge in merges:
+            merged_token = merge[0] + merge[1]
+            self.merges[merged_token] = self.token_to_id.get(merged_token)
 
         self.special_tokens = special_tokens
         if special_tokens is not None:
@@ -44,6 +49,12 @@ class Tokenizer:
             merges_data = file.read()
         return cls(vocab_data, merges_data, special_tokens)
 
+    """
+    TODO
+    1. brute-force
+    2. linkedlist
+    3. heap
+    """
     def encode_pretoken(self, pretoken: str) -> list[int]:
         result: list[int] = []
         tokens = list(pretoken.encode("utf-8"))
@@ -71,6 +82,12 @@ class Tokenizer:
             matches = pretoken_match(split)
             for match in matches:
                 result.extend(self.encode_pretoken(match.group()))
+
+        if DEBUG:
+            print("encode result")
+            print(result)
+            print(self.decode(result))
+
         return result
 
     def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
