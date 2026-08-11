@@ -75,11 +75,13 @@ class Tokenizer:
                 if rank is not None and (min_rank is None or rank < min_rank):
                     min_rank = rank
                     min_merge = (token, next_token)
+                    """
                     if DEBUG:
                         print("min_rank")
                         print(min_rank)
-                        print ("min_merge")
+                        print("min_merge")
                         print(min_merge)
+                    """
 
             if min_rank is None or min_merge is None:
                 break
@@ -110,15 +112,23 @@ class Tokenizer:
 
     def encode(self, text: str) -> list[int]:
         result: list[int] = []
-        if self.special_tokens is not None:
-            splits: Iterator[str] = re.splititer(
-                "|".join(re.escape(token) for token in self.special_tokens), text
-            )
+        special_tokens = sorted(self.special_tokens or [], key=len, reverse=True)
+        if special_tokens:
+            pattern = "(" + "|".join(re.escape(token) for token in special_tokens) + ")"
+            splits: Iterator[str] = re.splititer(pattern, text)
         else:
-            splits = [text]
+            splits = iter([text])
+
+        special_tokens_set = set(special_tokens)
+
         for split in splits:
-            matches = pretoken_match(split)
-            for match in matches:
+            if DEBUG:
+                print("split")
+                print(split)
+            if split in special_tokens_set:
+                result.append(self.token_to_id.get(split.encode("utf-8")))
+                continue
+            for match in pretoken_match(split):
                 result.extend(self.encode_pretoken(match.group()))
 
         if DEBUG:
@@ -130,9 +140,9 @@ class Tokenizer:
 
     def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
         for text in iterable:
-            yield self.encode(text)
+            yield from self.encode(text)
 
     def decode(self, ids: list[int]) -> str:
-        tokens = [self.id_to_token.get(id) for id in ids]
+        tokens: list[bytes] = [self.id_to_token.get(id) for id in ids]
         byte_string = b"".join(tokens)
         return byte_string.decode("utf-8", errors="replace")

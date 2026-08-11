@@ -213,16 +213,6 @@ def test_unicode_string_matches_tiktoken():
     reference_ids = reference_tokenizer.encode(test_string)
     ids = tokenizer.encode(test_string)
 
-    if DEBUG:
-        print("my result")
-        print(ids)
-        print(tokenizer.decode(ids))
-
-        print("reference result")
-        print(ids)
-        print(tokenizer.decode(ids))
-
-
     assert ids == reference_ids
 
     assert tokenizer.decode(ids) == test_string
@@ -236,6 +226,11 @@ def test_roundtrip_unicode_string_with_special_tokens():
     test_string = "Héllò hôw <|endoftext|><|endoftext|> are ü? 🙃<|endoftext|>"
     encoded_ids = tokenizer.encode(test_string)
     tokenized_string = [tokenizer.decode([x]) for x in encoded_ids]
+
+    if DEBUG:
+        print("tokenized_string")
+        print(tokenized_string)
+
     # Ensure the special <|endoftext|> token is preserved
     assert tokenized_string.count("<|endoftext|>") == 3
 
