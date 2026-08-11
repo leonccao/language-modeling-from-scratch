@@ -1,3 +1,4 @@
+import itertools
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
@@ -5,7 +6,7 @@ import regex as re
 
 from cs336_basics.pretokenization import pretoken_match
 
-DEBUG = True
+DEBUG = False
 
 
 class Tokenizer:
@@ -25,7 +26,7 @@ class Tokenizer:
         self.merges = {}
         for merge in merges:
             merged_token = merge[0] + merge[1]
-            self.merges[merged_token] = self.token_to_id.get(merged_token)
+            self.merges[merge] = self.token_to_id.get(merged_token)
 
         self.special_tokens = special_tokens
         if special_tokens is not None:
@@ -55,19 +56,56 @@ class Tokenizer:
     2. linkedlist
     3. heap
     """
+
     def encode_pretoken(self, pretoken: str) -> list[int]:
-        result: list[int] = []
-        tokens = list(pretoken.encode("utf-8"))
-        merged_token: bytes = b""
-        for token_num in tokens:
-            token = bytes([token_num])
-            candidate_token = merged_token + token
-            if self.token_to_id.get(candidate_token) is not None:
-                merged_token = candidate_token
-            else:
-                result.append(self.token_to_id.get(merged_token))
-                merged_token = token
-        result.append(self.token_to_id.get(merged_token))
+        tokens_code = list(pretoken.encode("utf-8"))
+        tokens = [bytes([token]) for token in tokens_code]
+        if DEBUG:
+            print("initial tokens")
+            print(tokens)
+
+        while True:
+            min_rank: int | None = None
+            min_merge: tuple[bytes, bytes] | None = None
+            for token, next_token in itertools.pairwise(tokens):
+                rank = self.merges.get((token, next_token))
+                if DEBUG:
+                    print("rank")
+                    print(rank)
+                if rank is not None and (min_rank is None or rank < min_rank):
+                    min_rank = rank
+                    min_merge = (token, next_token)
+                    if DEBUG:
+                        print("min_rank")
+                        print(min_rank)
+                        print ("min_merge")
+                        print(min_merge)
+
+            if min_rank is None or min_merge is None:
+                break
+
+            i = 0
+            new_tokens: list[bytes] = []
+            while i < len(tokens):
+                token = tokens[i]
+
+                if i < len(tokens) - 1:
+                    next_token = tokens[i + 1]
+                    if token == min_merge[0] and next_token == min_merge[1]:
+                        new_tokens.append(token + next_token)
+                        i += 2
+                        continue
+
+                new_tokens.append(token)
+                i += 1
+
+            tokens = new_tokens
+
+            if DEBUG:
+                print("merged tokens")
+                print(tokens)
+
+        result: list[int] = [self.token_to_id.get(token) for token in tokens]
         return result
 
     def encode(self, text: str) -> list[int]:
@@ -95,8 +133,6 @@ class Tokenizer:
             yield self.encode(text)
 
     def decode(self, ids: list[int]) -> str:
-        tokens = [
-            self.id_to_token.get(id) for id in ids
-        ]
+        tokens = [self.id_to_token.get(id) for id in ids]
         byte_string = b"".join(tokens)
         return byte_string.decode("utf-8", errors="replace")

@@ -12,7 +12,7 @@ import tiktoken
 from .adapters import get_tokenizer
 from .common import FIXTURES_PATH, gpt2_bytes_to_unicode
 
-DEBUG = True
+DEBUG = False
 
 VOCAB_PATH = FIXTURES_PATH / "gpt2_vocab.json"
 MERGES_PATH = FIXTURES_PATH / "gpt2_merges.txt"
@@ -208,8 +208,7 @@ def test_unicode_string_matches_tiktoken():
     tokenizer = get_tokenizer_from_vocab_merges_path(
         vocab_path=VOCAB_PATH, merges_path=MERGES_PATH, special_tokens=["<|endoftext|>"]
     )
-    #test_string = "Héllò hôw are ü? 🙃"
-    test_string = " 🙃"
+    test_string = "Héllò hôw are ü? 🙃"
 
     reference_ids = reference_tokenizer.encode(test_string)
     ids = tokenizer.encode(test_string)
@@ -220,8 +219,8 @@ def test_unicode_string_matches_tiktoken():
         print(tokenizer.decode(ids))
 
         print("reference result")
-        print(reference_ids)
-        print(tokenizer.decode(reference_ids))
+        print(ids)
+        print(tokenizer.decode(ids))
 
 
     assert ids == reference_ids
