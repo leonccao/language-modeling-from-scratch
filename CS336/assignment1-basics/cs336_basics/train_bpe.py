@@ -296,20 +296,14 @@ def write_bpe_outputs(
     merges: list[Pair],
     output_path: str | os.PathLike,
 ) -> None:
-    """Write a trained BPE vocabulary and merge list to an output directory."""
-    vocab_list = [(id, v.decode("utf-8", errors="ignore")) for id, v in vocab.items()]
-    merges_list = [
-        (
-            tok.decode("utf-8", errors="ignore"),
-            next_tok.decode("utf-8", errors="ignore"),
-        )
-        for tok, next_tok in merges
-    ]
+    """Write one byte-exact Python tuple per line for readable artifacts."""
+    vocab_data = "\n".join(repr(item) for item in sorted(vocab.items())) + "\n"
+    merges_data = "\n".join(repr(item) for item in merges) + "\n"
 
     output_path = Path(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
-    (output_path / "vocab.txt").write_text(f"{vocab_list}\n", encoding="utf-8")
-    (output_path / "merges.txt").write_text(f"{merges_list}\n", encoding="utf-8")
+    (output_path / "vocab.txt").write_text(vocab_data, encoding="utf-8")
+    (output_path / "merges.txt").write_text(merges_data, encoding="utf-8")
 
 
 def main() -> None:
@@ -333,7 +327,7 @@ def main() -> None:
         "--output-path",
         type=Path,
         default=Path("outputs"),
-        help="Directory for vocab.txt and merges.txt (default: outputs/).",
+        help="Directory for lossless vocab.txt and merges.txt artifacts (default: outputs/).",
     )
     args = parser.parse_args()
 

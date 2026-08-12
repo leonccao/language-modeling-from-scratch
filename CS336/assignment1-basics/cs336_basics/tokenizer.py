@@ -1,3 +1,4 @@
+import ast
 import itertools
 from collections.abc import Iterable, Iterator
 from pathlib import Path
@@ -44,11 +45,27 @@ class Tokenizer:
         merges_filepath: Path,
         special_tokens: list[str] | None = None,
     ):
+        """Load one byte-exact Python tuple per line from tokenizer artifacts."""
         with open(vocab_filepath, encoding="utf-8") as file:
-            vocab_data = file.read()
+            serialized_vocab = [
+                ast.literal_eval(line) for line in file if line.strip()
+            ]
         with open(merges_filepath, encoding="utf-8") as file:
-            merges_data = file.read()
-        return cls(vocab_data, merges_data, special_tokens)
+            merges = [ast.literal_eval(line) for line in file if line.strip()]
+
+        if not all(
+            isinstance(token_id, int) and isinstance(token, bytes)
+            for token_id, token in serialized_vocab
+        ):
+            raise ValueError("Vocabulary entries must be (int, bytes) pairs.")
+        if not all(
+            isinstance(left_token, bytes) and isinstance(right_token, bytes)
+            for left_token, right_token in merges
+        ):
+            raise ValueError("Merge entries must be (bytes, bytes) pairs.")
+
+        vocab = dict(serialized_vocab)
+        return cls(vocab, merges, special_tokens)
 
     """
     TODO

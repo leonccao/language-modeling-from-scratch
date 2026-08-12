@@ -584,7 +584,7 @@ def run_train_bpe(
             kept as a single token. If these special tokens occur in the `input_path`,
             they are treated as any other string.
         output_path (str | os.PathLike | None): Optional directory for writing
-            vocab.txt and merges.txt. No files are written when omitted.
+            lossless vocab.txt and merges.txt artifacts. No files are written when omitted.
         show_progress (bool): Display pre-tokenization and merge progress when true.
 
     Returns:

@@ -4,6 +4,8 @@ import time
 
 import pytest
 
+from cs336_basics.tokenizer import Tokenizer
+
 from .adapters import run_train_bpe
 from .common import FIXTURES_PATH, gpt2_bytes_to_unicode
 
@@ -85,7 +87,7 @@ def test_train_bpe():
 
 
 def test_train_bpe_writes_outputs(tmp_path, capsys):
-    run_train_bpe(
+    vocab, merges = run_train_bpe(
         input_path=FIXTURES_PATH / "corpus.en",
         vocab_size=258,
         special_tokens=["<|endoftext|>"],
@@ -94,10 +96,26 @@ def test_train_bpe_writes_outputs(tmp_path, capsys):
     )
 
     captured = capsys.readouterr()
-    assert (tmp_path / "vocab.txt").is_file()
-    assert (tmp_path / "merges.txt").is_file()
+    vocab_path = tmp_path / "vocab.txt"
+    merges_path = tmp_path / "merges.txt"
+    assert vocab_path.is_file()
+    assert merges_path.is_file()
     assert "Pre-tokenizing" in captured.err
     assert "Merging pairs" in captured.err
+
+    tokenizer = Tokenizer.from_files(
+        vocab_path,
+        merges_path,
+        special_tokens=["<|endoftext|>"],
+    )
+    assert tokenizer.id_to_token == vocab
+    assert list(tokenizer.merges) == merges
+    assert [tokenizer.id_to_token[token_id] for token_id in range(256)] == [
+        bytes([token_id]) for token_id in range(256)
+    ]
+
+    text = "Héllò 🙃<|endoftext|>"
+    assert tokenizer.decode(tokenizer.encode(text)) == text
 
 
 def test_train_bpe_special_tokens(snapshot):

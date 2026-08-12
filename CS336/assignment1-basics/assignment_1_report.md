@@ -48,3 +48,16 @@ focused story domain, whereas the OpenWebText tokenizer learns a wider range of
 vocabulary from more varied web content. OpenWebText also contains more
 multilingual fragments and encoding artifacts, making its learned vocabulary
 broader and noisier.
+
+## tokenizer_experiments (a) — TinyStories
+
+Across 10 uniformly sampled TinyStories training documents, the 10,000-token
+TinyStories tokenizer encoded 7,823 UTF-8 bytes into 1,891 tokens, for an
+aggregate compression ratio of 4.137 bytes per token.
+
+## tokenizer_experiments (c) — TinyStories
+
+On the same sample, the TinyStories tokenizer achieved a median single-process
+throughput of approximately 1.15 MB/s, excluding tokenizer loading and file
+I/O. At that rate, tokenizing the 825 GB Pile would take approximately 8.31
+days.
