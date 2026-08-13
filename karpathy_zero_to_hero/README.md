@@ -1,7 +1,7 @@
 # micrograd practice
 
 This is an implementation-free learning scaffold based on Andrej Karpathy's
-[`micrograd`](https://github.com/karpathy/micrograd) and the first lesson of
+[`micrograd`](https://github.com/karpathy/micrograd) as the first lesson of
 [Neural Networks: Zero to Hero](https://karpathy.ai/zero-to-hero.html). It keeps
 the original public interfaces and turns the scalar autograd engine, neural
 network library, and training demo into exercises.
@@ -32,7 +32,7 @@ corresponding test file.
 4. Implement reverse-mode automatic differentiation.
 5. Implement `Module`, `Neuron`, `Layer`, and `MLP`.
 6. Complete the model, loss, optimization, and prediction exercises in
-   `demo.ipynb`.
+   `demo.py`.
 
 | Stage | Command |
 | --- | --- |
@@ -42,18 +42,19 @@ corresponding test file.
 | Neural networks | `uv run pytest tests/test_04_nn.py` |
 | Entire exercise suite | `uv run pytest` |
 
-## Notebook
+## Guided demo
 
-Install the optional scientific stack and launch the guided demo:
+Install the optional scientific stack and run the guided demo:
 
 ```bash
-uv sync --group notebook
-uv run --group notebook jupyter lab demo.ipynb
+uv sync --group demo
+uv run --group demo python demo.py
 ```
 
-The setup and dataset cells are complete. Later cells state their contracts but
-omit model construction, loss calculation, SGD, and decision-boundary
-prediction. Complete the Python package before attempting those cells.
+The setup and dataset sections are complete. Later sections state their
+contracts but omit model construction, loss calculation, SGD, and
+decision-boundary prediction. Complete the Python package before attempting
+those sections.
 
 ## Project structure
 
@@ -62,7 +63,7 @@ micrograd/
   engine.py       # scalar Value and autograd exercises
   nn.py           # neural-network abstraction exercises
 tests/            # progressive, dependency-light correctness checks
-demo.ipynb        # guided end-to-end classifier exercise
+demo.py           # guided end-to-end classifier exercise
 ```
 
 The tests use deterministic expected values and numerical finite differences;

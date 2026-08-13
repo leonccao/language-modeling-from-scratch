@@ -14,8 +14,7 @@ license = { file = "LICENSE" }
 dev = [
     "pytest>=8.0",
 ]
-notebook = [
-    "jupyterlab>=4.0",
+demo = [
     "matplotlib>=3.7",
     "numpy>=1.24",
     "scikit-learn>=1.3",
