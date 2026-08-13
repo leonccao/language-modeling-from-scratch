@@ -49,11 +49,14 @@ vocabulary from more varied web content. OpenWebText also contains more
 multilingual fragments and encoding artifacts, making its learned vocabulary
 broader and noisier.
 
-## tokenizer_experiments (a) — TinyStories
+## tokenizer_experiments (a)
 
 Across 10 uniformly sampled TinyStories training documents, the 10,000-token
 TinyStories tokenizer encoded 7,823 UTF-8 bytes into 1,891 tokens, for an
 aggregate compression ratio of 4.137 bytes per token.
+Across 10 uniformly sampled OpenWebText training documents, the 32,000-token
+OpenWebText tokenizer encoded 65,969 UTF-8 bytes into 15,542 tokens, for an
+aggregate compression ratio of 4.245 bytes per token.
 
 ## tokenizer_experiments (c) — TinyStories
 
