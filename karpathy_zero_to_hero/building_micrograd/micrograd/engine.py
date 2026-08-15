@@ -1,13 +1,42 @@
+from collections.abc import Callable
+
+
 class Value:
     """Store a scalar value and the gradient of an output with respect to it."""
+    data: float
+    grad: float
+    _prev: set["Value"]
+    _op: str
+    _backward: Callable[[], None]
+
+    """
+    TODO
+    - backward
+    - a * 2 -> 2 * a
+    """
 
     def __init__(self, data, _children=(), _op=""):
         """Initialize a graph node, its gradient, and its graph metadata."""
-        raise NotImplementedError("TODO: implement Value.__init__")
+        self.data = data
+        self.grad = 0
+        self._prev = set(_children)
+        self._op = _op
+        self._backward = lambda: None
 
-    def __add__(self, other):
+
+    def __add__(self, other) -> "Value":
         """Return the sum as a new graph-connected Value."""
-        raise NotImplementedError("TODO: implement Value.__add__")
+
+        if not isinstance(other, Value):
+            other = Value(other)
+        out = Value(self.data + other.data, (self, other), "+")
+
+        def _backward():
+            self.grad += out.grad
+            other.grad += out.grad
+        out.backward = _backward
+
+        return out
 
     def __mul__(self, other):
         """Return the product as a new graph-connected Value."""
@@ -23,7 +52,11 @@ class Value:
 
     def backward(self):
         """Populate gradients for the computation graph ending at this Value."""
-        raise NotImplementedError("TODO: implement Value.backward")
+        """
+        TODO
+        topo sort
+        """
+        self._backward()
 
     def __neg__(self):
         """Return the arithmetic negation of this Value."""
@@ -53,6 +86,6 @@ class Value:
         """Support division of a scalar by this Value."""
         raise NotImplementedError("TODO: implement Value.__rtruediv__")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Return the upstream-compatible data and gradient representation."""
-        raise NotImplementedError("TODO: implement Value.__repr__")
+        return f"Value(data={self.data:.1f}, grad={self.grad:.1f})"
