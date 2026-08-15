@@ -1,7 +1,7 @@
 import random
 
 from micrograd.engine import Value
-from micrograd.nn import Layer, MLP, Module, Neuron
+from micrograd.nn import MLP, Layer, Module, Neuron
 
 
 def test_base_module_has_no_parameters_and_can_zero_grad():

@@ -1,5 +1,4 @@
 import pytest
-
 from micrograd.engine import Value
 
 
