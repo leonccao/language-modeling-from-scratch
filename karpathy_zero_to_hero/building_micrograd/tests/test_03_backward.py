@@ -32,6 +32,19 @@ def test_backward_accumulates_gradients_across_reused_values():
     assert x.grad == 7
 
 
+def test_backward_waits_for_all_paths_to_shared_intermediate():
+    x = Value(2.0)
+    shared = x * 3
+    left = shared * 4
+    right = shared * 5
+    output = left + right
+
+    output.backward()
+
+    assert shared.grad == 9
+    assert x.grad == 27
+
+
 def test_relu_backward_blocks_negative_branch():
     negative = Value(-2.0)
     positive = Value(2.0)

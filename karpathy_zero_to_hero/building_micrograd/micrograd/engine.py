@@ -1,8 +1,10 @@
+from collections import deque
 from collections.abc import Callable
 
 
 class Value:
     """Store a scalar value and the gradient of an output with respect to it."""
+
     data: float
     grad: float
     _prev: set["Value"]
@@ -17,7 +19,6 @@ class Value:
         self._op = _op
         self._backward = lambda: None
 
-
     def __add__(self, other) -> "Value":
         """Return the sum as a new graph-connected Value."""
 
@@ -28,6 +29,7 @@ class Value:
         def _backward():
             self.grad += out.grad
             other.grad += out.grad
+
         out._backward = _backward
 
         return out
@@ -42,6 +44,7 @@ class Value:
         def _backward():
             self.grad += other.data * out.grad
             other.grad += self.data * out.grad
+
         out._backward = _backward
 
         return out
@@ -49,25 +52,44 @@ class Value:
     def __pow__(self, other):
         """Raise this Value to an int or float power."""
         assert not isinstance(other, Value), "Does not support Value power"
-        out = Value(self.data ** other, (self,), "**")
+        out = Value(self.data**other, (self,), "**")
 
         def _backward():
             self.grad += other * self.data ** (other - 1) * out.grad
+
         out._backward = _backward
 
         return out
 
-    def relu(self):
+    def relu(self) -> "Value":
         """Apply the scalar rectified linear unit operation."""
-        raise NotImplementedError("TODO: implement Value.relu")
+        out = Value(max(0, self.data), (self,), "ReLU")
 
-    def backward(self):
+        def _backward():
+            self.grad += out.grad if self.data > 0 else 0
+
+        out._backward = _backward
+
+        return out
+
+    def backward(self) -> None:
         """Populate gradients for the computation graph ending at this Value."""
-        """
-        TODO
-        topo sort
-        """
-        self._backward()
+        queue: deque[Value] = deque()
+        visited: set[Value] = set()
+
+        def _traverse(self: Value):
+            for prev in self._prev:
+                if not prev in visited:
+                    visited.add(prev)
+                    _traverse(prev)
+                    queue.append(prev)
+        _traverse(self)
+        queue.append(self)
+
+        self.grad = 1
+        queue.reverse()
+        for val in queue:
+            val._backward()
 
     def __neg__(self):
         """Return the arithmetic negation of this Value."""
