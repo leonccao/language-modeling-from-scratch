@@ -31,8 +31,8 @@ corresponding test file.
 3. Implement the convenience arithmetic operators.
 4. Implement reverse-mode automatic differentiation.
 5. Implement `Module`, `Neuron`, `Layer`, and `MLP`.
-6. Complete the model, loss, optimization, and prediction exercises in
-   `demo.py`.
+6. Run the completed model, loss, optimization, and prediction workflow in
+   `demo.ipynb`.
 
 | Stage | Command |
 | --- | --- |
@@ -44,17 +44,18 @@ corresponding test file.
 
 ## Guided demo
 
-Install the optional scientific stack and run the guided demo:
+Install the optional scientific stack and register the project notebook kernel:
 
 ```bash
 uv sync --group demo
-uv run --group demo python demo.py
+uv run --group demo python -m ipykernel install --user \
+  --name micrograd-practice \
+  --display-name "Python (micrograd-practice)"
 ```
 
-The setup and dataset sections are complete. Later sections state their
-contracts but omit model construction, loss calculation, SGD, and
-decision-boundary prediction. Complete the Python package before attempting
-those sections.
+Open `demo.ipynb`, select the `Python (micrograd-practice)` kernel, and run the
+cells in order. The notebook covers dataset creation, model construction,
+max-margin loss, SGD training, and decision-boundary visualization.
 
 ## Project structure
 
@@ -63,7 +64,7 @@ micrograd/
   engine.py       # scalar Value and autograd exercises
   nn.py           # neural-network abstraction exercises
 tests/            # progressive, dependency-light correctness checks
-demo.py           # guided end-to-end classifier exercise
+demo.ipynb        # completed end-to-end classifier workflow
 ```
 
 The tests use deterministic expected values and numerical finite differences;

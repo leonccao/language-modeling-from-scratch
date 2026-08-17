@@ -15,6 +15,7 @@ dev = [
     "pytest>=8.0",
 ]
 demo = [
+    "ipykernel>=6.31.0",
     "matplotlib>=3.7",
     "numpy>=1.24",
     "scikit-learn>=1.3",
