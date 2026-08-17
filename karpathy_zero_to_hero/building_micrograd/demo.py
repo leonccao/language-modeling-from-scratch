@@ -43,7 +43,7 @@ def plot_dataset(features: np.ndarray, labels: np.ndarray) -> None:
 # %% Exercise 1: construct the model
 def create_model() -> MLP:
     """Create an MLP with architecture 2 -> 16 -> 16 -> 1."""
-    raise NotImplementedError("Exercise 1: construct the model")
+    return MLP(2, [16, 16, 1])
 
 
 # %% Exercise 2: define the objective
@@ -59,7 +59,20 @@ def calculate_loss(
     binary max-margin loss with L2 parameter regularization. The returned loss
     must be a Value and the returned accuracy must be a Python number.
     """
-    raise NotImplementedError("Exercise 2: implement the objective")
+    inputs = [list(map(Value, row)) for row in features]
+    scores = list(map(model, inputs))
+
+    losses = [(1 - yi * scorei).relu() for yi, scorei in zip(labels, scores)]
+    avg_loss = sum(losses) * (1.0 / len(losses))
+
+    alpha = 1e-4
+    reg_loss = alpha * sum(p * p for p in model.parameters())
+    total_loss = avg_loss + reg_loss
+
+    accs = [(yi > 0) == (scorei.data > 0) for yi, scorei in zip(labels, scores)]
+    avg_acc = sum(accs) * (1.0 / len(accs))
+
+    return (total_loss, avg_acc)
 
 
 # %% Exercise 3: optimize with SGD
@@ -75,7 +88,18 @@ def train(
     backpropagate, update every parameter, and report loss and accuracy. Use a
     learning rate that decreases from 1.0 toward 0.1 over the training run.
     """
-    raise NotImplementedError("Exercise 3: train the model")
+
+    for step in range(steps):
+        loss, acc = calculate_loss(model, features, labels)
+
+        model.zero_grad()
+        loss.backward()
+
+        learn_rate = 1.0 - (1.0 - 0.1) / 100 * step
+        for p in model.parameters():
+            p.data -= p.grad * learn_rate
+
+        print(f"Step {step}, loss {loss.data}, accuracy {acc * 100}%")
 
 
 def create_decision_mesh(
@@ -97,7 +121,11 @@ def predict_mesh(
     model: MLP, mesh_points: np.ndarray, output_shape: tuple[int, int]
 ) -> np.ndarray:
     """Return boolean model predictions reshaped to output_shape."""
-    raise NotImplementedError("Exercise 4: predict over the mesh")
+    inputs = [list(map(Value, xrow)) for xrow in mesh_points]
+    scores = list(map(model, inputs))
+    result = np.array([score.data > 0 for score in scores])
+    result = result.reshape(output_shape)
+    return result
 
 
 def plot_decision_boundary(
